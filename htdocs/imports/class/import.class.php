@@ -38,7 +38,6 @@ class Import
 	var $array_import_fieldshidden;
 	var $array_import_entities;
 	var $array_import_regex;
-	var $array_import_updatekeys;
 	var $array_import_examplevalues;
 	var $array_import_convertvalue;
 	var $array_import_run_sql_after;
@@ -154,8 +153,6 @@ class Import
 						$this->array_import_entities[$i]=$module->import_entities_array[$r];
 						// Tableau des alias a exporter (cle=champ, valeur=alias)
 						$this->array_import_regex[$i]=$module->import_regex_array[$r];
-						// Array of columns allowed as UPDATE options
-						$this->array_import_updatekeys[$i]=$module->import_updatekeys_array[$r];
 						// Array of examples
 						$this->array_import_examplevalues[$i]=$module->import_examplevalues_array[$r];
 						// Tableau des regles de conversion d'une valeur depuis une autre source (cle=champ, valeur=tableau des regles)

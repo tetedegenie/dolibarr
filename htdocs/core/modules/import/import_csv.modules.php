@@ -54,9 +54,6 @@ class ImportCsv extends ModeleImports
 
 	var $cacheconvert=array();      // Array to cache list of value found after a convertion
 	var $cachefieldtable=array();   // Array to cache list of value found into fields@tables
-	
-	var $nbinsert = 0; // # of insert done during the import
-	var $nbupdate = 0; // # of update done during the import
 
 
 	/**
@@ -269,10 +266,9 @@ class ImportCsv extends ModeleImports
 	 * @param 	Object	$objimport						Object import (contains objimport->array_import_tables, objimport->array_import_fields, objimport->array_import_convertvalue, ...)
 	 * @param	int		$maxfields						Max number of fields to use
 	 * @param	string	$importid						Import key
-	 * @param	array	$updatekeys						Array of keys to use to try to do update
 	 * @return	int										<0 if KO, >0 if OK
 	 */
-	function import_insert($arrayrecord,$array_match_file_to_database,$objimport,$maxfields,$importid,$updatekeys)
+	function import_insert($arrayrecord,$array_match_file_to_database,$objimport,$maxfields,$importid)
 	{
 		global $langs,$conf,$user;
         global $thirdparty_static;    	// Specific to thirdparty import
@@ -303,15 +299,13 @@ class ImportCsv extends ModeleImports
 		else
 		{
 			$last_insert_id_array = array(); // store the last inserted auto_increment id for each table, so that dependent tables can be inserted with the appropriate id (eg: extrafields fk_object will be set with the last inserted object's id)
-			$updatedone = false;
-			$insertdone = false;
 			// For each table to insert, me make a separate insert
 			foreach($objimport->array_import_tables[0] as $alias => $tablename)
 			{
 				// Build sql request
 				$sql='';
-				$listfields=array();
-				$listvalues=array();
+				$listfields='';
+				$listvalues='';
 				$i=0;
 				$errorforthistable=0;
 
@@ -545,35 +539,36 @@ class ImportCsv extends ModeleImports
 						}
 
 						// Define $listfields and $listvalues to build SQL request
-						$listfields[] = $fieldname;
+						if ($listfields) { $listfields.=', '; $listvalues.=', '; }
+						$listfields.=$fieldname;
 
 						// Note: arrayrecord (and 'type') is filled with ->import_read_record called by import.php page before calling import_insert
-						if (empty($newval) && $arrayrecord[($key-1)]['type'] < 0)		 $listvalues[] = ($newval=='0'?$newval:"null");
-						elseif (empty($newval) && $arrayrecord[($key-1)]['type'] == 0)	 $listvalues[] = "''";
-						else															 $listvalues[] = "'".$this->db->escape($newval)."'";
+						if (empty($newval) && $arrayrecord[($key-1)]['type'] < 0)       $listvalues.=($newval=='0'?$newval:"null");
+						elseif (empty($newval) && $arrayrecord[($key-1)]['type'] == 0) $listvalues.="''";
+						else															 $listvalues.="'".$this->db->escape($newval)."'";
 					}
 					$i++;
 				}
 
 				// We add hidden fields (but only if there is at least one field to add into table)
-				if (!empty($listfields) && is_array($objimport->array_import_fieldshidden[0]))
+				if ($listfields && is_array($objimport->array_import_fieldshidden[0]))
 				{
     				// Loop on each hidden fields to add them into listfields/listvalues
 				    foreach($objimport->array_import_fieldshidden[0] as $key => $val)
     				{
     				    if (! preg_match('/^'.preg_quote($alias).'\./', $key)) continue;    // Not a field of current table
+    				    if ($listfields) { $listfields.=', '; $listvalues.=', '; }
     				    if ($val == 'user->id')
     				    {
-    				        $listfields[] = preg_replace('/^'.preg_quote($alias).'\./','',$key);
-    				        $listvalues[] = $user->id;
+    				        $listfields.=preg_replace('/^'.preg_quote($alias).'\./','',$key);
+    				        $listvalues.=$user->id;
     				    }
     				    elseif (preg_match('/^lastrowid-/',$val))
     				    {
     				        $tmp=explode('-',$val);
     				        $lastinsertid=(isset($last_insert_id_array[$tmp[1]]))?$last_insert_id_array[$tmp[1]]:0;
-							$keyfield = preg_replace('/^'.preg_quote($alias).'\./','',$key);
-    				        $listfields[] = $keyfield;
-                            $listvalues[] = $lastinsertid;
+    				        $listfields.=preg_replace('/^'.preg_quote($alias).'\./','',$key);
+                            $listvalues.=$lastinsertid;
     				        //print $key."-".$val."-".$listfields."-".$listvalues."<br>";exit;
     				    }
     				}
@@ -583,114 +578,47 @@ class ImportCsv extends ModeleImports
 				// If no error for this $alias/$tablename, we have a complete $listfields and $listvalues that are defined
 				if (! $errorforthistable)
 				{
-					//print "$alias/$tablename/$listfields/$listvalues<br>";
-					if (!empty($listfields))
+				    //print "$alias/$tablename/$listfields/$listvalues<br>";
+					if ($listfields)
 					{
-						$updatedone = false;
-						$insertdone = false;
-						if(!empty($updatekeys)) {
-							// We do SELECT to get the rowid, if we already have the rowid, it's to be used below for related tables (extrafields)
-							if(empty($lastinsertid)) {
-								$sqlSelect = 'SELECT rowid FROM '.$tablename;
-								
-								$data = array_combine($listfields, $listvalues);
-								$where = array();
-								$filters = array();
-								foreach ($updatekeys as $key) {
-									$col = $objimport->array_import_updatekeys[0][$key];
-									$key=preg_replace('/^.*\./i','',$key);
-									$where[] = $key.' = '.$data[$key];
-									$filters[] = $col.' = '.$data[$key];
-								}
-								$sqlSelect.= ' WHERE '.implode(' AND ', $where);
-								
-								$resql=$this->db->query($sqlSelect);
-								if($resql) {
-									$res = $this->db->fetch_object($resql);
-									if($resql->num_rows == 1) {
-										$lastinsertid = $res->rowid;
-										$last_insert_id_array[$tablename] = $lastinsertid;
-									} else if($resql->num_rows > 1) {
-										$this->errors[$error]['lib']=$langs->trans('MultipleRecordFoundWithTheseFilters', implode($filters, ', '));
-										$this->errors[$error]['type']='SQL';
-										$error++;
-									} else {
-										// No record found with filters, insert will be tried below
-									}
-								}
-								else
-								{
-									//print 'E';
-									$this->errors[$error]['lib']=$this->db->lasterror();
-									$this->errors[$error]['type']='SQL';
-									$error++;
-								}
-							}
-							
-							if(!empty($lastinsertid)) {
-								// Build SQL UPDATE request
-								$sqlstart = 'UPDATE '.$tablename;
-								
-								$data = array_combine($listfields, $listvalues);
-								$set = array();
-								foreach ($data as $key => $val) {
-									$set[] = $key.' = '.$val;
-								}
-								$sqlstart.= ' SET '.implode(', ', $set);
-								
-								if(empty($keyfield)) $keyfield = 'rowid';
-								$sqlend = ' WHERE '.$keyfield.' = '.$lastinsertid;
-								
-								$sql = $sqlstart.$sqlend;
-								
-								// Run update request
-								$resql=$this->db->query($sql);
-								if($resql) {
-									// No error, update has been done. $this->db->db->affected_rows can be 0 if data hasn't changed
-									$updatedone = true;
-								}
-								else
-								{
-									//print 'E';
-									$this->errors[$error]['lib']=$this->db->lasterror();
-									$this->errors[$error]['type']='SQL';
-									$error++;
-								}
-							}
-						}
+					    //var_dump($objimport->array_import_convertvalue); exit;
 
-						// Update not done, we do insert
-						if(!$error && !$updatedone) {
-							// Build SQL INSERT request
-							$sqlstart = 'INSERT INTO '.$tablename.'('.implode(', ', $listfields).', import_key';
-							$sqlend = ') VALUES('.implode(', ', $listvalues).", '".$importid."'";
-							if (! empty($tablewithentity_cache[$tablename])) {
-								$sqlstart.= ', entity';
-								$sqlend.= ', '.$conf->entity;
-							} 
-							if (! empty($objimport->array_import_tables_creator[0][$alias])) {
-								$sqlstart.= ', '.$objimport->array_import_tables_creator[0][$alias];
-								$sqlend.=', '.$user->id;
-							}
-							$sql = $sqlstart.$sqlend.')';
-							dol_syslog("import_csv.modules", LOG_DEBUG);
-							
-							// Run insert request
-							if ($sql)
+						// Build SQL request
+						if (empty($tablewithentity_cache[$tablename]))
+						{
+							$sql ='INSERT INTO '.$tablename.'('.$listfields.', import_key';
+							if (! empty($objimport->array_import_tables_creator[0][$alias])) $sql.=', '.$objimport->array_import_tables_creator[0][$alias];
+							$sql.=') VALUES('.$listvalues.", '".$importid."'";
+						}
+						else
+						{
+							$sql ='INSERT INTO '.$tablename.'('.$listfields.', import_key, entity';
+							if (! empty($objimport->array_import_tables_creator[0][$alias])) $sql.=', '.$objimport->array_import_tables_creator[0][$alias];
+							$sql.=') VALUES('.$listvalues.", '".$importid."', ".$conf->entity ;
+						}
+						if (! empty($objimport->array_import_tables_creator[0][$alias])) $sql.=', '.$user->id;
+						$sql.=')';
+						dol_syslog("import_csv.modules", LOG_DEBUG);
+
+						//print '> '.join(',',$arrayrecord);
+						//print 'sql='.$sql;
+						//print '<br>'."\n";
+
+						// Run insert request
+						if ($sql)
+						{
+							$resql=$this->db->query($sql);
+							$last_insert_id_array[$tablename] = $this->db->last_insert_id($tablename); // store the last inserted auto_increment id for each table, so that dependent tables can be inserted with the appropriate id. This must be done just after the INSERT request, else we risk losing the id (because another sql query will be issued somewhere in Dolibarr).
+							if ($resql)
 							{
-								$resql=$this->db->query($sql);
-								$last_insert_id_array[$tablename] = $this->db->last_insert_id($tablename); // store the last inserted auto_increment id for each table, so that dependent tables can be inserted with the appropriate id. This must be done just after the INSERT request, else we risk losing the id (because another sql query will be issued somewhere in Dolibarr).
-								if ($resql)
-								{
-									$insertdone = true;
-								}
-								else
-								{
-									//print 'E';
-									$this->errors[$error]['lib']=$this->db->lasterror();
-									$this->errors[$error]['type']='SQL';
-									$error++;
-								}
+								//print '.';
+							}
+							else
+							{
+								//print 'E';
+								$this->errors[$error]['lib']=$this->db->lasterror();
+								$this->errors[$error]['type']='SQL';
+								$error++;
 							}
 						}
 					}
@@ -702,9 +630,6 @@ class ImportCsv extends ModeleImports
 
 			    if ($error) break;
 			}
-
-			if($updatedone) $this->nbupdate++;
-			if($insertdone) $this->nbinsert++;
 		}
 
 		return 1;

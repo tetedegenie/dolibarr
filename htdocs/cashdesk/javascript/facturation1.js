@@ -16,14 +16,15 @@
  */
 
 // Calcul et affichage en temps reel des informations sur le produit en cours
-function modif() {
+function modif(type_modif) {
 
 	var prix_unit = parseFloat ( document.getElementById('frmQte').txtPrixUnit.value );
 	var qte = parseFloat ( document.getElementById('frmQte').txtQte.value );
 	var _index = parseFloat ( document.getElementById('frmQte').selTva.selectedIndex );
-	var tva = parseFloat ( document.getElementById('frmQte').selTva.options[_index].text );
+	var tva = (parseFloat ( document.getElementById('frmQte').selTva.options[_index].text)/100)+1;
 	var remise = parseInt ( document.getElementById('frmQte').txtRemise.value );
 	var stock = document.getElementById('frmQte').txtStock.value;
+	var prix_ttc = parseFloat ( document.getElementById('frmQte').txtTotalTTC.value );
 
 // 		// On s'assure que la quantitee tapee ne depasse pas le stock
 // 		if ( qte > stock ) {
@@ -50,23 +51,44 @@ function modif() {
 	// Calcul du total HT, sans remise
 	var total_ht = Math.round ( (prix_unit * qte) * 100 ) / 100;
 
-	// Calcul du montant de la remise, apres s'etre assure que cette derniere ne soit pas negative
-	if ( remise <= 0 ) {
+	if (type_modif == null){
+		
+		// Calcul du montant de la remise, apres s'etre assure que cette derniere ne soit pas negative
+		if ( remise <= 0 ) {
 
-		document.getElementById('frmQte').txtRemise.value = 0;
-		montant_remise = 0;
+			document.getElementById('frmQte').txtRemise.value = 0;
+			montant_remise = 0;
 
-	} else {
+		} else {
 
-		var montant_remise = total_ht * remise / 100;
+			var montant_remise = total_ht * remise / 100;
 
+		}
+
+		// Recalcul du montant total, avec la remise
+		var total = Math.round ( (total_ht - montant_remise) *100 ) / 100;
+
+		// Affichage du resultat dans le formulaire
+		document.getElementById('frmQte').txtTotal.value = total.toFixed(2);
+		document.getElementById('frmQte').txtTotalTTC.value = (total * tva).toFixed(2);
+	
+	} else if (type_modif="total"){
+
+		// Calcul du pourcentage de la remise
+		var pourcent_remise = parseFloat ((1-(prix_ttc / (prix_unit * tva * qte)))*100);
+
+		total = total_ht * (1-(pourcent_remise/100));
+
+		if (pourcent_remise >= 100 || pourcent_remise <0){
+			document.getElementById('frmQte').txtTotalTTC.value = (prix_unit * tva * qte).toFixed(2);
+			pourcent_remise = 0;
+		}
+
+		// Affichage du resultat dans le formulaire
+		document.getElementById('frmQte').txtTotal.value = total.toFixed(2);
+		document.getElementById('frmQte').txtRemise.value = pourcent_remise.toFixed(2);
+		
 	}
-
-	// Recalcul du montant total, avec la remise
-	var total = Math.round ( (total_ht - montant_remise) *100 ) / 100;
-
-	// Affichage du resultat dans le formulaire
-	document.getElementById('frmQte').txtTotal.value = total.toFixed(2);
 
 }
 

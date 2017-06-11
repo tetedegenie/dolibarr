@@ -102,11 +102,13 @@ $langs->load("cashdesk");
 			<th></th>
 			<th><?php echo $langs->trans("Discount"); ?> (%)</th>
 			<th><?php echo $langs->trans("TotalHT"); ?></th>
-            <th>&nbsp;</th>
-            <th><?php echo $langs->trans("VATRate"); ?></th>
+            		<th>&nbsp;</th>
+            		<th><?php echo $langs->trans("VATRate"); ?></th>	
+			<th>&nbsp;</th>
+			<th><?php echo $langs->trans("TotalTTC"); ?></th>
             </tr>
 			<tr>
-				<td><input class="texte1 maxwidth50onsmartphone" type="text" id="txtQte" name="txtQte" value="1" onkeyup="javascript: modif();" onfocus="javascript: this.select();" />
+				<td><input class="texte1 maxwidth50onsmartphone" type="text" id="txtQte" name="txtQte" value="1" onkeyup="javascript: modif(null);" onfocus="javascript: this.select();" />
 <?php print genkeypad("txtQte", "frmQte");?>
 				</td>
 				<!-- Affichage du stock pour l'article courant -->
@@ -115,16 +117,16 @@ $langs->load("cashdesk");
 				</td>
 				<!-- Show unit price -->
 				<?php // TODO Remove the disabled and use this value when adding product into cart ?>
-				<td><input class="texte1_off maxwidth50onsmartphone" type="text" name="txtPrixUnit" value="<?php echo price2num($obj_facturation->prix(), 'MU'); ?>" onchange="javascript: modif();" disabled /></td>
+				<td><input class="texte1_off maxwidth50onsmartphone" type="text" name="txtPrixUnit" value="<?php echo price2num($obj_facturation->prix(), 'MU'); ?>" onchange="javascript: modif(null);" disabled /></td>
 				<td></td>
     			<!-- Choix de la remise -->
-    			<td><input class="texte1 maxwidth50onsmartphone" type="text" id="txtRemise" name="txtRemise" value="0" onkeyup="javascript: modif();" onfocus="javascript: this.select();"/>
+    			<td><input class="texte1 maxwidth50onsmartphone" type="text" id="txtRemise" name="txtRemise" value="0" onkeyup="javascript: modif(null);" onfocus="javascript: this.select();"/>
 					<?php print genkeypad("txtRemise", "frmQte");?>
     			</td>
     			<!-- Affichage du total HT -->
     			<td><input class="texte1_off maxwidth50onsmartphone" type="text" name="txtTotal" value="" disabled /></td><td></td>
                 <!-- Choix du taux de TVA -->
-                <td class="select_tva">
+                <td class="select_tva" onchange="javascript: modif(null);">
                 <?php
 					$vatrate = $obj_facturation->vatrate;      // To get vat rate we just have selected
 
@@ -133,6 +135,12 @@ $langs->load("cashdesk");
 					echo $form->load_tva('selTva', (isset($_POST["selTva"])?GETPOST("selTva",'alpha',2):$vatrate), $mysoc, $buyer, 0, 0, '', false, -1);
 			    ?>
                 </td>
+		
+		<td></td>
+
+
+<td><input class="texte1 maxwidth50onsmartphone" type="text" id="txtTotalTTC" name="txtTotalTTC" value="" onkeyup="javascript: modif('total');" onfocus="javascript: this.select();" /></td><td></td>	
+					<?php print genkeypad("txtTotalTTC", "frmQte");?>
 			</tr>
 		</table>
 
